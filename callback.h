@@ -28,11 +28,10 @@ int32_t CallbackEnable(SchedulerCallback func);
 int32_t CallbackDisable(SchedulerCallback func);
 
 // Base timing for callbacks (minimum 100uS)
-#define _100micro  1
-#define _10milli   100
-#define _100milli  1000
-#define _second    10000
-#define _minute    600000
-#define _hour      36000000
+#define _500micro    1
+#define _millisecond 2
+#define _second      2000
+#define _minute      120000
+#define _hour        7200000
 
 #endif

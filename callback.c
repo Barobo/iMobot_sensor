@@ -1,17 +1,12 @@
+#include "global.h"
 #include "callback.h"
 #include "timer.h"
-#include "global.h"
 
 uint8_t event_count = 0;
 ScheduledEvent event_list[MAX_CALLBACK_CNT];
 
 int32_t CallbackRegister(SchedulerCallback callbackFunction, uint32_t run_time)
 {
-	// if the run time is less than the timer period, kick out
-	if (run_time < callback_divisor)
-	{
-		return (-1);
-	}
     if (event_count < sizeof(event_list) / sizeof(SchedulerCallback))
     {
         event_list[event_count].enabled       = FALSE;

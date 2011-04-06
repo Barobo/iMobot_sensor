@@ -1,26 +1,25 @@
+#include "global.h"
 #include "hardware.h"
 #include "timer.h"
 #include "init.h"
 #include "callback.h"
-#include "global.h"
-
-void BlinkLED(void);
+#include "i2c.h"
 
 void main(void)
 {
     WD_STOP();
+    CAL_CLOCK();
     
-    InitTimerA();
-    InitHardware();
-    
-    RegisterCallback(BlinkLED, 100ul * _millisecond);
-    
+//    TimerAInit();
+    HardwareInit();
+    I2cInit();
     _EINT();
     
-    while(1) { continue; }
+    LPM0;       // CPU off, await USI interrupt
+    _NOP();
 }
 
 void BlinkLED(void)
 {
-    RED_LED_TOGGLE();
+    TOGGLE(RED_LED);
 }

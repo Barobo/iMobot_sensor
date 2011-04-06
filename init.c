@@ -1,9 +1,9 @@
+#include "global.h"
 #include "init.h"
 #include "hardware.h"
-#include "global.h"
 
-void InitHardware(void)
+void HardwareInit(void)
 {
-    MAKE_OUTPUT(RED_LED_PORT, RED_LED_PIN);
-    RED_LED_OFF();
+    MAKE_OUTPUT(RED_LED);
+    SET_LOW(RED_LED);
 }
