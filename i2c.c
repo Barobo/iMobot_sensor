@@ -4,10 +4,9 @@
 
 #define Number_of_Bytes  5
 
-char MST_Data = 0;
 char SLV_Data = 0x55;
-char SLV_Addr = 0x90;
-int I2C_State, Bytecount, transmit = 0;
+char slave_address = 0x90;
+int i2c_state, byte_count, transmit = 0;
 
 #pragma vector = USI_VECTOR
 __interrupt void USI_TXRX (void)
@@ -17,106 +16,100 @@ __interrupt void USI_TXRX (void)
 
     if (USICTL1 & USISTTIFG)     // Start entry?
     {
-        P1OUT |= 0x01;                          // LED on: sequence start
-        I2C_State = 2;                          // Enter 1st state on start
+        SET_HIGH(RED_LED);
+        ChangeState(GET_ADDRESS);
     }
     
-    switch(__even_in_range(I2C_State,14))
+    switch(__even_in_range(i2c_state,14))
     {           
-        case RECIEVE_ADDRESS:
+        case GET_ADDRESS:
             USICNT = (USICNT & 0xE0) + 0x08; // Bit counter = 8, RX address
             USICTL1 &= ~USISTTIFG;        // Clear start flag
-            I2C_State = 4;                // Go to next state: check address
+            ChangeState(CHECK_ADDRESS);
             break;            
         case CHECK_ADDRESS:
             if (USISRL & 0x01)            // If master read...
             {
-                SLV_Addr = 0x91;             // Save R/W bit
+                slave_address = 0x91;             // Save R/W bit
                 transmit = 1;
             }
             else
             {
                 transmit = 0;
-                SLV_Addr = 0x90;
+                slave_address = 0x90;
             }
-            USICTL0 |= USIOE;             // SDA = output
-            if (USISRL == SLV_Addr)       // Address match?
+            DATA_OUTPUT();
+            if (USISRL == slave_address)       // Address match?
             {
                 USISRL = 0x00;              // Send Ack
-                P1OUT &= ~0x01;             // LED off
-                if (transmit == 0)
-                { 
-                    I2C_State = 6;           // Go to next state: RX data
-                }
-                if (transmit == 1)
-                {  
-                    I2C_State = 10;          // Else go to next state: TX data
-                }
+                SET_LOW(RED_LED);
+                ChangeState(transmit ? SEND_DATA : GET_DATA);
             }
             else
             {
                 USISRL = 0xFF;              // Send NAck
-                P1OUT |= 0x01;              // LED on: error
-                I2C_State = 8;              // next state: prep for next Start
+                SET_HIGH(RED_LED);
+                ChangeState(ACK_DATA);
             }
             USICNT |= 0x01;               // Bit counter = 1, send Ack bit
             break;
             
-        case RECIEVE_DATA:
-            USICTL0 &= ~USIOE;            // SDA = input
+        case GET_DATA:
+            DATA_INPUT();
             USICNT |=  0x08;              // Bit counter = 8, RX data
-            I2C_State = 8;                // next state: Test data and (N)Ack
+            ChangeState(ACK_DATA);
             break;  
             
         case ACK_DATA:
-            USICTL0 |= USIOE;             // SDA = output
-            if (Bytecount <= (Number_of_Bytes-2))          // If not last byte
+            DATA_OUTPUT();
+            if (byte_count <= (Number_of_Bytes-2))          // If not last byte
             {
                 USISRL = 0x00;              // Send Ack
-                I2C_State = 6;              // Rcv another byte
-                Bytecount++;
+                ChangeState(GET_DATA);
+                byte_count++;
                 USICNT |= 0x01;             // Bit counter = 1, send Ack bit
             }
             else                          // Last Byte
             {
                 USISRL = 0xFF;              // Send NAck
-                USICTL0 &= ~USIOE;            // SDA = input
-                SLV_Addr = 0x90;              // Reset slave address
-                I2C_State = 0;                // Reset state machine
-                Bytecount =0;                 // Reset counter for next TX/RX
+                DATA_INPUT();
+                ChangeState(IDLE);
+                byte_count =0;                 // Reset counter for next TX/RX
             }
             break;
             
-        case TRANSMIT_DATA:
-            USICTL0 |= USIOE;             // SDA = output
+        case SEND_DATA:
+            DATA_OUTPUT();
             USISRL = SLV_Data++;
             USICNT |=  0x08;              // Bit counter = 8, TX data
-            I2C_State = 12;               // Go to next state: receive (N)Ack
+            ChangeState(GET_ACK);
             break;
             
-        case RECIEVE_ACK:
-            USICTL0 &= ~USIOE;            // SDA = input
+        case GET_ACK:
+            DATA_INPUT();
             USICNT |= 0x01;               // Bit counter = 1, receive Ack
-            I2C_State = 14;               // Go to next state: check Ack
+            ChangeState(CHECK_ACK);
             break;
             
         case CHECK_ACK:
             if (USISRL & 0x01)               // If Nack received...
             {
-                USICTL0 &= ~USIOE;            // SDA = input
-                SLV_Addr = 0x90;              // Reset slave address
-                I2C_State = 0;                // Reset state machine
-                Bytecount = 0;
+                DATA_INPUT();
+                slave_address = 0x90;              // Reset slave address
+                ChangeState(IDLE);
+                byte_count = 0;
             }
             else                          // Ack received
             {
-                P1OUT &= ~0x01;             // LED off            
-                USICTL0 |= USIOE;             // SDA = output
+                SET_LOW(RED_LED);        
+                DATA_OUTPUT();
                 USISRL = SLV_Data++;
                 USICNT |=  0x08;              // Bit counter = 8, TX data
-                I2C_State = 12;               // Go to next state: receive (N)Ack
+                ChangeState(GET_ACK);
             }
-            break;        
+            break;
+        default:
+            break;     
     }
     USICTL1 &= ~USIIFG;                       // Clear pending flags
 }
@@ -141,4 +134,8 @@ void I2cInit(void)
     transmit = 0;    
 }
 
+void ChangeState(uint32_t state)
+{
+    i2c_state = state;
+}
 

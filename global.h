@@ -3,6 +3,27 @@
 
 #include "msp430g2231.h"
 
+// sensor types
+enum
+{
+    IR_DIGITAL,
+    IR_ANALOG,
+    ACCELERATION_1D,
+    ACCELERATION_2D,
+    ACCELERATION_3D,
+    GYRO_1D,
+    GYRO_2D,
+    GYRO_3D,
+    FLASHLIGHT,
+    COMPASS,
+    MOISTURE,
+    GPS,
+    TEMPERATURE,
+    GRIPPER
+};
+
+#define SENSOR_TYPE IR_SENSOR_DIGITAL
+
 #define LAUNCHPAD
 
 #define CLOCK_DCO   1000000                                 // DCO freq
@@ -16,11 +37,14 @@
 
 // macros
 #define _BV(bit) (1<<bit)
+
 #define WD_STOP() (WDTCTL = WDTPW + WDTHOLD)
-#define CAL_CLOCK() {\
+
+#define CAL_CLOCK()\
+{\
     BCSCTL1 = CALBC1_1MHZ;\
     DCOCTL = CALDCO_1MHZ;\
-        }
+}
 
 //types
 typedef unsigned char      uint8_t;
