@@ -2,35 +2,37 @@
 #include "i2c.h"
 #include "hardware.h"
 
-#define Number_of_Bytes  5
+#define NUM_BYTES  5
 
-char SLV_Data = 0x55;
+char slave_data = 0x55;
 char slave_address = 0x90;
 int i2c_state, byte_count, transmit = 0;
 
 #pragma vector = USI_VECTOR
 __interrupt void USI_TXRX (void)
 {
-    // Rx bytes from master: State 2->4->6->8 
-    // Tx bytes to Master: State 2->4->10->12->14
+    // Rx bytes from master: 
+    //     GET_ADDRESS->CHECK_ADDRESS->GET_DATA->ACK_DATA
+    // Tx bytes to Master:
+    //     GET_ADDRESS->CHECK_ADDRESS->SEND_DATA->GET_ACK->CHECK_ACK
 
     if (USICTL1 & USISTTIFG)     // Start entry?
     {
         SET_HIGH(RED_LED);
         ChangeState(GET_ADDRESS);
+        USICTL1 &= ~USISTTIFG;        // Clear start flag
     }
     
-    switch(__even_in_range(i2c_state,14))
+    switch(i2c_state)
     {           
         case GET_ADDRESS:
             USICNT = (USICNT & 0xE0) + 0x08; // Bit counter = 8, RX address
-            USICTL1 &= ~USISTTIFG;        // Clear start flag
             ChangeState(CHECK_ADDRESS);
             break;            
         case CHECK_ADDRESS:
-            if (USISRL & 0x01)            // If master read...
+            if (USISRL & _BIT(0))            // If master read...
             {
-                slave_address = 0x91;             // Save R/W bit
+                slave_address |= _BIT(0);             // Save R/W bit
                 transmit = 1;
             }
             else
@@ -41,13 +43,13 @@ __interrupt void USI_TXRX (void)
             DATA_OUTPUT();
             if (USISRL == slave_address)       // Address match?
             {
-                USISRL = 0x00;              // Send Ack
+                USISRL = DATA_ACK;              // Send Ack
                 SET_LOW(RED_LED);
                 ChangeState(transmit ? SEND_DATA : GET_DATA);
             }
             else
             {
-                USISRL = 0xFF;              // Send NAck
+                USISRL = DATA_NACK;              // Send NAck
                 SET_HIGH(RED_LED);
                 ChangeState(ACK_DATA);
             }
@@ -62,25 +64,25 @@ __interrupt void USI_TXRX (void)
             
         case ACK_DATA:
             DATA_OUTPUT();
-            if (byte_count <= (Number_of_Bytes-2))          // If not last byte
+            if (byte_count <= (NUM_BYTES - 2))          // If not last byte
             {
-                USISRL = 0x00;              // Send Ack
+                USISRL = DATA_ACK;              // Send Ack
                 ChangeState(GET_DATA);
                 byte_count++;
                 USICNT |= 0x01;             // Bit counter = 1, send Ack bit
             }
             else                          // Last Byte
             {
-                USISRL = 0xFF;              // Send NAck
+                USISRL = DATA_NACK;              // Send NAck
                 DATA_INPUT();
                 ChangeState(IDLE);
-                byte_count =0;                 // Reset counter for next TX/RX
+                byte_count = 0;                 // Reset counter for next TX/RX
             }
             break;
             
         case SEND_DATA:
             DATA_OUTPUT();
-            USISRL = SLV_Data++;
+            USISRL = slave_data++;
             USICNT |=  0x08;              // Bit counter = 8, TX data
             ChangeState(GET_ACK);
             break;
@@ -103,7 +105,7 @@ __interrupt void USI_TXRX (void)
             {
                 SET_LOW(RED_LED);        
                 DATA_OUTPUT();
-                USISRL = SLV_Data++;
+                USISRL = slave_data++;
                 USICNT |=  0x08;              // Bit counter = 8, TX data
                 ChangeState(GET_ACK);
             }

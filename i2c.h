@@ -6,18 +6,21 @@ void ChangeState(uint32_t state);
 
 enum
 {
-    IDLE            = 0,
-    GET_ADDRESS     = 2,
-    CHECK_ADDRESS   = 4,
-    GET_DATA        = 6,
-    ACK_DATA        = 8,
-    SEND_DATA       = 10,
-    GET_ACK         = 12,
-    CHECK_ACK       = 14
+    GET_ADDRESS    ,
+    CHECK_ADDRESS  ,
+    GET_DATA       ,
+    ACK_DATA       ,
+    SEND_DATA      ,
+    GET_ACK        ,
+    CHECK_ACK
 };
 
 #define DATA_OUTPUT() {USICTL0 |= USIOE;}
 #define DATA_INPUT()  {USICTL0 &= ~USIOE;}
+
+#define DATA_ACK  0
+#define DATA_NACK 0xFF
+
 
 
 
