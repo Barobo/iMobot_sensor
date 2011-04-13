@@ -14,7 +14,6 @@ void main(void)
     HardwareInit();
     I2cInit();
     _EINT();
-    
     LPM0;       // CPU off, await USI interrupt
     _NOP();
 }
