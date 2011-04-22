@@ -14,11 +14,6 @@ void main(void)
     HardwareInit();
     I2cInit();
     _EINT();
-    LPM0;       // CPU off, await USI interrupt
+    LPM0;
     _NOP();
-}
-
-void BlinkLED(void)
-{
-    TOGGLE(RED_LED);
 }

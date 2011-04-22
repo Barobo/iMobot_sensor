@@ -24,6 +24,8 @@ enum
 
 #define SENSOR_TYPE IR_SENSOR_DIGITAL
 
+#define SLAVE_ADDRESS 0x90
+
 #define LAUNCHPAD
 
 #define CLOCK_DCO   1000000                                 // DCO freq

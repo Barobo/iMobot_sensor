@@ -2,87 +2,78 @@
 #include "i2c.h"
 #include "hardware.h"
 
-#define NUM_BYTES  5
-
-char slave_data = 0x00;
-char slave_address = 0x90;
-int i2c_state, byte_count;
+uint8_t cnt = 0;
+uint8_t state;
 
 #pragma vector = USI_VECTOR
 __interrupt void USI_TXRX (void)
 {
-    // Rx bytes from master: 
-    //     GET_ADDRESS->CHECK_ADDRESS->GET_DATA->ACK_DATA
-    // Tx bytes to Master:
-    //     GET_ADDRESS->CHECK_ADDRESS->SEND_DATA->GET_ACK->CHECK_ACK
-
-    if (USICTL1 & USISTTIFG)     // Start entry?
+    if (START_ISSUED)
     {
-        SET_HIGH(RED_LED);
         ChangeState(GET_ADDRESS);
     }
     
-    switch(i2c_state)
-    {           
+    switch(state)
+    {
         case GET_ADDRESS:
-            USICNT = (USICNT & 0xE0) + 0x08; // Bit counter = 8, RX address
-            USICTL1 &= ~USISTTIFG;        // Clear start flag
+            set_bits_remaining(8);
+            CLEAR_START();
             ChangeState(CHECK_ADDRESS);
-            break;            
-        case CHECK_ADDRESS:
-            if (USISRL & _BV(0))            // If master read...
-            {
-                slave_address |= _BV(0);             // Save R/W bit
-            }
-            DATA_OUTPUT();
-            if (USISRL == slave_address)       // Address match?
-            {
-                USISRL = DATA_ACK;              // Send Ack
-                SET_LOW(RED_LED);
-                ChangeState(SEND_DATA);
-            }
-            else
-            {
-                USISRL = DATA_NACK;         // Send NAck
-                SET_LOW(RED_LED);
-                ChangeState(SEND_NACK);
-            }
-            USICNT |= 0x01;               // Bit counter = 1, send Ack bit
             break;
-        case SEND_NACK:
-            DATA_INPUT();
-            slave_address = 0x90;         // Reset slave address
-            ChangeState(IDLE);
+        case CHECK_ADDRESS:
+            if ((DATA_BUFFER & ADDRESS_MASK) == SLAVE_ADDRESS)
+            {
+                ChangeState(DATA_BUFFER & READ_BIT ? SEND_DATA : RECEIVE_DATA);
+                DATA_OUTPUT();
+                DATA_BUFFER = DATA_ACK;
+            }
+            else // address did not match
+            {
+                DATA_INPUT();
+                // TODO: should we just ignore bad addresses?
+                DATA_BUFFER = DATA_NACK;         // Send NAck
+                ChangeState(IDLE);
+            }
+            set_bits_remaining(1);
             break;
         case SEND_DATA:
             DATA_OUTPUT();
-            USISRL = slave_data;
-            USICNT |=  0x08;              // Bit counter = 8, TX data
+            DATA_BUFFER = cnt++;
+            set_bits_remaining(8);
             ChangeState(GET_ACK);
-            break;            
+            break;
+        case RECEIVE_DATA:
+            DATA_INPUT();
+            set_bits_remaining(8);
+            ChangeState(CHECK_DATA);
+            break;
+        case CHECK_DATA:
+            DATA_OUTPUT();
+            DATA_BUFFER = DATA_ACK;
+            set_bits_remaining(1);
+            ChangeState(CHECK_ACK);
+            break;
         case GET_ACK:
             DATA_INPUT();
-            USICNT |= 0x01;               // Bit counter = 1, receive Ack
+            set_bits_remaining(1);
             ChangeState(CHECK_ACK);
-            break;            
+            break;
         case CHECK_ACK:
-            if (USISRL & 0x01)               // If Nack received...
+            if (DATA_BUFFER & NACK_RESPONSE)
             {
-                SET_HIGH(RED_LED);
+                DATA_INPUT();
+                ChangeState(IDLE);
             }
-            else                          // Ack received
+            else // ACK from master
             {
-                SET_LOW(RED_LED);
-                USISRL = slave_data++;
+                DATA_INPUT();
+                ChangeState(IDLE);
             }
-            DATA_INPUT();
-            slave_address = 0x90;         // Reset slave address
-            ChangeState(IDLE);
             break;
         default:
-            break;     
+            break;
     }
-    USICTL1 &= ~USIIFG;                       // Clear pending flags
+    CLEAR_INT();
 }
 
 void I2cInit(void)
@@ -100,12 +91,15 @@ void I2cInit(void)
     USICKCTL = USICKPL;                     // Setup clock polarity
     USICNT |= USIIFGCC;                     // Disable automatic clear control
     USICTL0 &= ~USISWRST;                   // Enable USI
-    USICTL1 &= ~USIIFG;                     // Clear pending flag
-    
+    USICTL1 &= ~USIIFG;                     // Clear pending flag    
 }
 
-void ChangeState(uint32_t state)
+void ChangeState(uint8_t in_state)
 {
-    i2c_state = state;
+    state = in_state;
 }
 
+void set_bits_remaining(uint8_t cnt)
+{
+    USICNT |= cnt & BIT_COUNT_MASK;
+}
