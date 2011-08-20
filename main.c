@@ -4,6 +4,7 @@
 #include "init.h"
 #include "callback.h"
 #include "i2c.h"
+#include "endpoints.h"
 
 void main(void)
 {
@@ -12,8 +13,18 @@ void main(void)
     
 //    TimerAInit();
     HardwareInit();
-    I2cInit();
+    I2cInit(0x02, 0x00);
     _EINT();
-    LPM0;
-    _NOP();
+    
+    while (1)
+    {
+        //LPM0;
+        //_NOP();
+        if (GetWriteEndpoint(0))
+            SET_LOW(RED_LED);
+        else
+            SET_HIGH(RED_LED);
+        
+        SetReadEndpoint(0, READ_IN(LP_SWITCH));
+    }
 }

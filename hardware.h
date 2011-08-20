@@ -24,6 +24,7 @@
 
 #ifdef LAUNCHPAD
 #define RED_LED   0
+#define LP_SWITCH 3
 #endif
 
 #define I2C_DATA 7
